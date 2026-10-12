@@ -48,7 +48,7 @@
       document.querySelector('#dynamic').append(added);
     };
     document.querySelector('#remove').onclick = () => added?.remove();
-    document.querySelector('#reuse').onclick = () => { const parent = primary.parentElement; primary.remove(); parent.append(primary); };
+    document.querySelector('#reuse').onclick = () => { const parent = primary.parentElement; primary.remove(); setTimeout(() => parent.append(primary), 0); };
     document.querySelector('#source').onclick = () => { primary.src = './assets/demo.webm?source=changed'; primary.load(); };
     document.querySelector('#dialog').onclick = () => document.querySelector('#modal').classList.toggle('open');
     document.querySelector('#close').onclick = () => document.querySelector('#modal').classList.remove('open');

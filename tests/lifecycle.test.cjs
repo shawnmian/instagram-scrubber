@@ -22,7 +22,7 @@ function configure(video) {
   video.play = () => Promise.resolve(); video.pause = () => {};
   video.getBoundingClientRect = () => ({ left: 100, top: 100, right: 500, bottom: 400, width: 400, height: 300 });
 }
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+const tick = () => new Promise((resolve) => setTimeout(resolve, 45));
 
 test('initial and late videos get one controller, and initialization is idempotent', async () => {
   const dom = setup('<video id="first"></video>');
@@ -39,6 +39,7 @@ test('removing a subtree destroys controllers and reinsertion creates one fresh 
   const dom = setup('<div id="wrap"><video></video><div><video></video></div></div>');
   const manager = initialize(dom.window.document);
   const old = manager.controllers.get(dom.window.document.querySelector('video'));
+  await tick();
   const wrap = dom.window.document.querySelector('#wrap'); wrap.remove(); await tick();
   assert.equal(manager.controllers.size, 0);
   assert.equal(old.host.isConnected, false);
@@ -77,4 +78,62 @@ test('pagehide tears down the manager and pageshow restores it', async () => {
   assert.notEqual(next, first);
   assert.equal(next.controllers.size, 1);
   next.destroy(); dom.window.close();
+});
+
+test('opening and closing an aria-modal dialog updates background timelines', async () => {
+  const dom = setup('<style>#modal{display:none} #modal.open{display:block}</style><video id="background"></video><div id="modal" role="dialog" aria-modal="true"></div>');
+  const modal = dom.window.document.querySelector('#modal');
+  modal.getBoundingClientRect = () => ({ left: 850, top: 700, right: 950, bottom: 780, width: 100, height: 80 });
+  const video = dom.window.document.querySelector('video');
+  const manager = initialize(dom.window.document);
+  await tick();
+  const host = manager.controllers.get(video).host;
+  assert.equal(host.hidden, false);
+  modal.classList.toggle('open');
+  await tick();
+  assert.equal(host.hidden, true);
+  modal.classList.toggle('open');
+  await tick();
+  assert.equal(host.hidden, false);
+  manager.destroy(); dom.window.close();
+});
+test('ancestor hidden changes hide and restore a rendered timeline', async () => {
+  const dom = setup('<div id="ancestor"><video></video></div>');
+  const ancestor = dom.window.document.querySelector('#ancestor');
+  const video = dom.window.document.querySelector('video');
+  const manager = initialize(dom.window.document);
+  await tick();
+  const host = manager.controllers.get(video).host;
+  assert.equal(host.hidden, false);
+  ancestor.hidden = true;
+  await tick();
+  assert.equal(host.hidden, true);
+  ancestor.hidden = false;
+  await tick();
+  assert.equal(host.hidden, false);
+  manager.destroy(); dom.window.close();
+});
+test('visibility and fullscreen changes update an initially hidden page', async () => {
+  const dom = setup('<video></video>');
+  let hidden = true;
+  Object.defineProperty(dom.window.document, 'hidden', { configurable: true, get: () => hidden });
+  Object.defineProperty(dom.window.document, 'fullscreenElement', { configurable: true, writable: true, value: null });
+  const video = dom.window.document.querySelector('video');
+  const manager = initialize(dom.window.document);
+  await tick();
+  const host = manager.controllers.get(video).host;
+  assert.equal(host.hidden, true);
+  hidden = false;
+  dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+  await tick();
+  assert.equal(host.hidden, false);
+  dom.window.document.fullscreenElement = video;
+  dom.window.document.dispatchEvent(new dom.window.Event('fullscreenchange'));
+  await tick();
+  assert.equal(host.hidden, true);
+  dom.window.document.fullscreenElement = null;
+  dom.window.document.dispatchEvent(new dom.window.Event('fullscreenchange'));
+  await tick();
+  assert.equal(host.hidden, false);
+  manager.destroy(); dom.window.close();
 });

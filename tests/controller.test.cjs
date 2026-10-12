@@ -67,9 +67,13 @@ test('paused drag remains paused and cancellation clears drag without resuming',
 test('source reset or destroy during drag prevents resume', async () => {
   const { dom, video } = makeVideo();
   const controller = new VideoController(video);
+  controller.updateLayout({ left: 0, top: 0, width: 300, height: 200 });
   controller.input.dispatchEvent(pointer(dom.window, 'pointerdown'));
+  assert.equal(controller.host.hidden, false);
+  assert.ok(controller.drag);
   video.src = 'https://example.invalid/next.mp4';
   video.dispatchEvent(new dom.window.Event('loadstart'));
+  assert.equal(controller.drag, null);
   dom.window.document.dispatchEvent(pointer(dom.window, 'pointerup'));
   await Promise.resolve();
   assert.equal(video.playCalls, 0);
@@ -122,4 +126,59 @@ test('destroy is idempotent, removes the host, and clears drag state', () => {
   assert.equal(host.isConnected, false);
   assert.equal(controller.drag, null);
   dom.window.close();
+});
+
+test('secondary pointer release and cancel do not finish the primary drag', async () => {
+  const { dom, video } = makeVideo();
+  const controller = new VideoController(video);
+  controller.updateLayout({ left: 0, top: 0, width: 300, height: 200 });
+  controller.input.dispatchEvent(pointer(dom.window, 'pointerdown', { pointerId: 1 }));
+  controller.input.dispatchEvent(pointer(dom.window, 'pointerup', { pointerId: 2 }));
+  controller.input.dispatchEvent(pointer(dom.window, 'pointercancel', { pointerId: 2 }));
+  assert.ok(controller.drag);
+  assert.equal(video.playCalls, 0);
+  controller.input.dispatchEvent(pointer(dom.window, 'pointercancel', { pointerId: 1 }));
+  await Promise.resolve();
+  assert.equal(controller.drag, null);
+  assert.equal(video.playCalls, 0);
+  controller.destroy(); dom.window.close();
+});
+test('paused video stays paused after a normal pointer release', async () => {
+  const { dom, video } = makeVideo({ paused: true });
+  const controller = new VideoController(video);
+  controller.updateLayout({ left: 0, top: 0, width: 300, height: 200 });
+  controller.input.dispatchEvent(pointer(dom.window, 'pointerdown'));
+  controller.input.dispatchEvent(pointer(dom.window, 'pointerup'));
+  await Promise.resolve();
+  assert.equal(video.playCalls, 0);
+  assert.equal(video.paused, true);
+  controller.destroy(); dom.window.close();
+});
+test('blur and pointer cancellation never resume a playing drag', async () => {
+  const { dom, video } = makeVideo();
+  const controller = new VideoController(video);
+  controller.updateLayout({ left: 0, top: 0, width: 300, height: 200 });
+  controller.input.dispatchEvent(pointer(dom.window, 'pointerdown'));
+  dom.window.document.dispatchEvent(pointer(dom.window, 'pointercancel'));
+  assert.equal(controller.drag, null);
+  assert.equal(video.playCalls, 0);
+  video.paused = false;
+  controller.input.dispatchEvent(pointer(dom.window, 'pointerdown'));
+  dom.window.dispatchEvent(new dom.window.Event('blur'));
+  await Promise.resolve();
+  assert.equal(controller.drag, null);
+  assert.equal(video.playCalls, 0);
+  controller.destroy(); dom.window.close();
+});
+test('finite duration restores a previously hidden controller without a layout event', () => {
+  const { dom, video } = makeVideo();
+  const controller = new VideoController(video);
+  controller.updateLayout({ left: 0, top: 0, width: 300, height: 200 });
+  video.duration = Infinity;
+  video.dispatchEvent(new dom.window.Event('durationchange'));
+  assert.equal(controller.host.hidden, true);
+  video.duration = 38;
+  video.dispatchEvent(new dom.window.Event('durationchange'));
+  assert.equal(controller.host.hidden, false);
+  controller.destroy(); dom.window.close();
 });

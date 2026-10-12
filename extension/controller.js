@@ -30,14 +30,14 @@
         input::-webkit-slider-thumb { width:16px; height:16px; }
         input::-moz-range-thumb { width:16px; height:16px; }
         input:disabled { cursor:default; opacity:.58; }
-        output { flex:none; min-width:70px; text-align:right; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; white-space:nowrap; }
+        .time-label { flex:none; min-width:70px; text-align:right; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; white-space:nowrap; }
       `;
       this.bar = this.document.createElement('div');
       this.bar.className = 'bar';
       this.input = this.document.createElement('input');
       this.input.type = 'range'; this.input.min = '0'; this.input.max = '0'; this.input.step = '0.1';
       this.input.setAttribute('aria-label', 'Seek video'); this.input.setAttribute('aria-valuetext', 'Loading video'); this.input.disabled = true;
-      this.output = this.document.createElement('span'); this.output.textContent = 'Loading video…';
+      this.output = this.document.createElement('span'); this.output.className = 'time-label'; this.output.textContent = 'Loading video…';
       this.bar.append(this.input, this.output); shadow.append(style, this.bar);
       (options.root || this.document.body || this.document.documentElement).append(this.host);
       this.bind();
@@ -75,8 +75,8 @@
         this.on(this.input, type, (event) => this.stopEvent(event));
       }
       this.on(this.input, 'pointerdown', (event) => this.beginDrag(event));
-      this.on(this.input, 'pointerup', () => this.finishDrag(true));
-      this.on(this.input, 'pointercancel', () => this.finishDrag(false));
+      this.on(this.input, 'pointerup', (event) => { if (this.pointerMatches(event)) this.finishDrag(true); });
+      this.on(this.input, 'pointercancel', (event) => { if (this.pointerMatches(event)) this.finishDrag(false); });
       this.on(this.document, 'pointerup', (event) => { if (!this.drag || !this.pointerMatches(event)) return; this.finishDrag(true); });
       this.on(this.document, 'pointercancel', (event) => { if (this.drag && this.pointerMatches(event)) this.finishDrag(false); });
       this.on(this.document.defaultView, 'blur', () => this.finishDrag(false));
@@ -152,6 +152,7 @@
       this.input.value = valid ? String(Math.min(now, duration)) : '0';
       this.input.setAttribute('aria-valuetext', valid ? `${formatTime(now)} of ${formatTime(duration)}` : this.error ? 'Video unavailable' : 'Loading video');
       this.output.textContent = valid ? `${formatTime(now)} / ${formatTime(duration)}` : this.error ? 'Video unavailable' : 'Loading video…';
+      if (duration !== Infinity && valid && this.layout && this.host.hidden) this.updateLayout(this.layout);
     }
 
     updateLayout(bounds) {

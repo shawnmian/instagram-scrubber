@@ -13,7 +13,7 @@
     const win = document.defaultView;
     if (document.fullscreenElement) return null;
     const videoStyle = win.getComputedStyle(video);
-    if (videoStyle.display === 'none' || videoStyle.visibility === 'hidden' || videoStyle.contentVisibility === 'hidden') return null;
+    if (videoStyle.display === 'none' || videoStyle.visibility === 'hidden' || videoStyle.contentVisibility === 'hidden' || video.hidden || video.getAttribute('aria-hidden') === 'true') return null;
     let rect = rectangle(video);
     if (rect.width < 1 || rect.height < 1) return null;
     let left = Math.max(0, rect.left), top = Math.max(0, rect.top);
@@ -21,7 +21,7 @@
     let element = video.parentElement;
     while (element && element !== document.documentElement) {
       const style = win.getComputedStyle(element);
-      if (style.display === 'none' || style.visibility === 'hidden' || style.contentVisibility === 'hidden') return null;
+      if (element.hidden || element.getAttribute('aria-hidden') === 'true' || style.display === 'none' || style.visibility === 'hidden' || style.contentVisibility === 'hidden') return null;
       const clipsX = /(hidden|clip|auto|scroll)/.test(style.overflowX || style.overflow);
       const clipsY = /(hidden|clip|auto|scroll)/.test(style.overflowY || style.overflow);
       if (clipsX || clipsY) {
@@ -34,7 +34,16 @@
     if (right <= left || bottom <= top) return null;
     const centerX = (left + right) / 2, centerY = (top + bottom) / 2;
     for (const dialog of document.querySelectorAll('[role="dialog"], [aria-modal="true"], dialog[open]')) {
-      if (dialog.contains(video) || video.contains(dialog)) continue;
+      if (dialog.contains(video) || video.contains(dialog) || dialog.hidden || dialog.getAttribute('aria-hidden') === 'true') continue;
+      let ancestor = dialog;
+      let rendered = true;
+      while (ancestor && ancestor !== document.documentElement) {
+        const dialogStyle = win.getComputedStyle(ancestor);
+        if (ancestor.hidden || ancestor.getAttribute('aria-hidden') === 'true' || dialogStyle.display === 'none' || dialogStyle.visibility === 'hidden' || dialogStyle.contentVisibility === 'hidden') { rendered = false; break; }
+        ancestor = ancestor.parentElement;
+      }
+      if (!rendered) continue;
+      if (dialog.getAttribute('aria-modal') === 'true') return null;
       const box = rectangle(dialog);
       if (centerX >= box.left && centerX <= box.right && centerY >= box.top && centerY <= box.bottom) return null;
     }
@@ -55,7 +64,7 @@
       this.root.style.cssText = 'position:fixed;inset:0;z-index:2147483000;pointer-events:none;overflow:visible;';
       (document.body || document.documentElement).append(this.root);
       this.mutationObserver = new this.window.MutationObserver((records) => this.onMutations(records));
-      this.mutationObserver.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+      this.mutationObserver.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'class', 'style', 'hidden', 'open', 'aria-hidden', 'aria-modal'] });
       this.intersectionObserver = typeof this.window.IntersectionObserver === 'function'
         ? new this.window.IntersectionObserver((entries) => {
           for (const entry of entries) { this.visible.set(entry.target, entry.isIntersecting && entry.intersectionRatio > 0); this.layoutOne(entry.target); }
@@ -64,8 +73,12 @@
         ? new this.window.ResizeObserver((entries) => { for (const entry of entries) this.layoutOne(entry.target); }) : null;
       this.onScroll = () => this.scheduleLayout();
       this.onResize = () => this.scheduleLayout();
+      this.onVisibilityChange = () => this.scheduleLayout();
+      this.onFullscreenChange = () => this.scheduleLayout();
       this.window.addEventListener('scroll', this.onScroll, true);
       this.window.addEventListener('resize', this.onResize);
+      document.addEventListener('visibilitychange', this.onVisibilityChange);
+      document.addEventListener('fullscreenchange', this.onFullscreenChange);
       this.scan(document);
       this.scheduleLayout();
     }
@@ -146,6 +159,8 @@
       if (this.resizeObserver) this.resizeObserver.disconnect();
       this.window.removeEventListener('scroll', this.onScroll, true);
       this.window.removeEventListener('resize', this.onResize);
+      this.document.removeEventListener('visibilitychange', this.onVisibilityChange);
+      this.document.removeEventListener('fullscreenchange', this.onFullscreenChange);
       if (this.frame) this.window.cancelAnimationFrame(this.frame);
       this.frame = 0;
       for (const controller of this.controllers.values()) controller.destroy();

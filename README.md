@@ -1,13 +1,13 @@
 # Instagram Scrubber
 
-Instagram Scrubber is a Firefox extension that adds a compact timeline to videos on Instagram's desktop website. It supports Reels, feed videos, and video post dialogs that use ordinary HTML video elements.
+Instagram Scrubber is a Firefox extension that adds a compact timeline to videos on Instagram's desktop website. It targets Reels, feed videos, and video post dialogs that use ordinary HTML video elements; these live Instagram surfaces still need manual verification.
 
 ## Load it in Firefox
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Select **Load Temporary Add-on…**.
 3. Choose `extension/manifest.json`.
-4. Open `https://www.instagram.com/` and sign in as usual.
+4. Refresh any Instagram tabs that were already open, then open `https://www.instagram.com/` and sign in as usual.
 
 Firefox removes a temporary add-on when it restarts. Load it again after restarting. The ZIP in `dist/` is an unsigned development artifact. Firefox Add-ons Manager does not install that ZIP as a signed release.
 
@@ -31,6 +31,7 @@ The source uses plain JavaScript and Manifest V3. Node tests use `node:test`; DO
 
 ```sh
 npm install
+npx playwright install chromium
 npm test
 npm run validate
 npm run browser:smoke
@@ -38,7 +39,7 @@ npm run lint:firefox
 npm run package
 ```
 
-The browser fixture is `tests/fixtures/index.html`. It uses the checked-in `tests/fixtures/assets/demo.webm`, generated locally from FFmpeg's `testsrc` pattern, and includes add, remove, reuse, source-change, clip, and dialog controls. The browser smoke command uses Playwright's cached Chromium. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use a different Chromium binary.
+After `npm install`, run `npx playwright install chromium` to install the browser used by the smoke script. The browser fixture is `tests/fixtures/index.html`. It uses the checked-in `tests/fixtures/assets/demo.webm`, generated locally from FFmpeg's `testsrc` pattern, and includes add, remove, reuse, source-change, clip, and dialog controls. The browser smoke command uses Playwright's cached Chromium. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use a different Chromium binary.
 
 `npm run validate` checks the manifest, Firefox metadata, exact host allowlist, permission scope, local assets, and JavaScript syntax. `npm run package` runs validation and creates `dist/instagram-scrubber-0.1.0.zip` from the contents of `extension/` only.
 
