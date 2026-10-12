@@ -57,9 +57,13 @@
       this.window = document.defaultView;
       this.controllers = new Map();
       this.visible = new WeakMap();
-      this.metrics = { scans: 0 };
+      this.spatialCells = new Map();
+      this.hovered = new Set();
+      this.metrics = { scans: 0, pointerCandidates: 0 };
       this.frame = 0;
       this.destroyed = false;
+      this.lastPointer = null;
+      this.inputModality = 'keyboard';
       this.root = document.createElement('div');
       this.root.setAttribute('data-instagram-scrubber-root', '');
       this.root.style.cssText = 'position:fixed;inset:0;z-index:2147483000;pointer-events:none;overflow:visible;';
@@ -76,8 +80,21 @@
       this.onResize = () => this.scheduleLayout();
       this.onVisibilityChange = () => this.scheduleLayout();
       this.onFullscreenChange = () => this.scheduleLayout();
+      this.onPointerMove = (event) => {
+        this.lastPointer = { x: event.clientX, y: event.clientY };
+        this.updatePointer();
+      };
+      this.onPointerDown = () => { this.inputModality = 'pointer'; };
+      this.onKeyDown = () => { this.inputModality = 'keyboard'; };
+      this.onPointerOut = (event) => { if (!event.relatedTarget) { this.lastPointer = null; this.updatePointer(); } };
+      this.onWindowBlur = () => { this.lastPointer = null; this.updatePointer(); };
       this.window.addEventListener('scroll', this.onScroll, true);
       this.window.addEventListener('resize', this.onResize);
+      document.addEventListener('pointermove', this.onPointerMove, true);
+      document.addEventListener('pointerdown', this.onPointerDown, true);
+      document.addEventListener('keydown', this.onKeyDown, true);
+      document.addEventListener('pointerout', this.onPointerOut, true);
+      this.window.addEventListener('blur', this.onWindowBlur);
       document.addEventListener('visibilitychange', this.onVisibilityChange);
       document.addEventListener('fullscreenchange', this.onFullscreenChange);
       this.scan(document);
@@ -92,7 +109,7 @@
       if (scope.querySelectorAll) videos.push(...scope.querySelectorAll('video'));
       for (const video of videos) {
         if (this.controllers.has(video) || this.root.contains(video)) continue;
-        const controller = new api.VideoController(video, { root: this.root, isVisible: (candidate) => this.isVisible(candidate) });
+        const controller = new api.VideoController(video, { root: this.root, isVisible: (candidate) => this.isVisible(candidate), isKeyboardModality: () => this.inputModality === 'keyboard' });
         this.controllers.set(video, controller);
         if (this.intersectionObserver) this.intersectionObserver.observe(video);
         if (this.resizeObserver) this.resizeObserver.observe(video);
@@ -111,6 +128,33 @@
       if (!controller) return;
       const bounds = this.isVisible(video) ? visibleBounds(video, this.document) : null;
       controller.updateLayout(bounds);
+      this.indexController(controller);
+    }
+
+    cellKeys(bounds) {
+      if (!bounds || bounds.width <= 0 || bounds.height <= 0) return [];
+      const size = 256;
+      const x1 = Math.floor(bounds.left / size), x2 = Math.floor((bounds.left + bounds.width) / size);
+      const y1 = Math.floor(bounds.top / size), y2 = Math.floor((bounds.top + bounds.height) / size);
+      const keys = [];
+      for (let x = x1; x <= x2; x++) for (let y = y1; y <= y2; y++) keys.push(`${x}:${y}`);
+      return keys;
+    }
+
+    indexController(controller) {
+      for (const key of controller.hoverCells || []) {
+        const bucket = this.spatialCells.get(key);
+        bucket?.delete(controller);
+        if (bucket?.size === 0) this.spatialCells.delete(key);
+      }
+      controller.hoverCells = [];
+      if (controller.host.hidden || !controller.layout) return;
+      controller.hoverCells = this.cellKeys(controller.layout);
+      for (const key of controller.hoverCells) {
+        let bucket = this.spatialCells.get(key);
+        if (!bucket) this.spatialCells.set(key, bucket = new Set());
+        bucket.add(controller);
+      }
     }
 
     scheduleLayout() {
@@ -118,13 +162,30 @@
       this.frame = this.window.requestAnimationFrame(() => {
         this.frame = 0;
         for (const video of this.controllers.keys()) this.layoutOne(video);
+        this.updatePointer();
       });
+    }
+
+    updatePointer() {
+      const point = this.lastPointer;
+      const next = new Set();
+      if (point) {
+        const key = `${Math.floor(point.x / 256)}:${Math.floor(point.y / 256)}`;
+        const candidates = this.spatialCells.get(key) || [];
+        this.metrics.pointerCandidates += candidates.size || 0;
+        for (const controller of candidates) if (controller.containsPoint(point.x, point.y)) next.add(controller);
+      }
+      for (const controller of this.hovered) if (!next.has(controller) && controller.pointerOverVideo) controller.setPointerHover(false);
+      for (const controller of next) if (!controller.pointerOverVideo) controller.setPointerHover(true);
+      this.hovered = next;
     }
 
     prune() {
       for (const [video, controller] of this.controllers) {
         if (!video.isConnected) {
           controller.destroy(); this.controllers.delete(video);
+          this.indexController(controller);
+          this.hovered.delete(controller);
           if (this.intersectionObserver) this.intersectionObserver.unobserve(video);
           if (this.resizeObserver) this.resizeObserver.unobserve(video);
           this.visible.delete?.(video);
@@ -160,12 +221,18 @@
       if (this.resizeObserver) this.resizeObserver.disconnect();
       this.window.removeEventListener('scroll', this.onScroll, true);
       this.window.removeEventListener('resize', this.onResize);
+      this.document.removeEventListener('pointermove', this.onPointerMove, true);
+      this.document.removeEventListener('pointerdown', this.onPointerDown, true);
+      this.document.removeEventListener('keydown', this.onKeyDown, true);
+      this.document.removeEventListener('pointerout', this.onPointerOut, true);
+      this.window.removeEventListener('blur', this.onWindowBlur);
       this.document.removeEventListener('visibilitychange', this.onVisibilityChange);
       this.document.removeEventListener('fullscreenchange', this.onFullscreenChange);
       if (this.frame) this.window.cancelAnimationFrame(this.frame);
       this.frame = 0;
       for (const controller of this.controllers.values()) controller.destroy();
       this.controllers.clear();
+      this.spatialCells.clear(); this.hovered.clear();
       this.root.remove();
       const state = this.document[STATE_KEY];
       if (state?.manager === this) {

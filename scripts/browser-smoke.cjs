@@ -1,13 +1,15 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
-const { chromium } = require('playwright');
+const { chromium, firefox } = require('playwright');
 
 (async () => {
-  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || chromium.executablePath();
+  const useFirefox = process.env.SMOKE_BROWSER === 'firefox';
   const screenshot = path.resolve(__dirname, '../artifacts/fixture.png');
   fs.mkdirSync(path.dirname(screenshot), { recursive: true });
-  const browser = await chromium.launch({ headless: true, executablePath, args: ['--allow-file-access-from-files'] });
+  const browser = useFirefox
+    ? await firefox.launch({ headless: true })
+    : await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || chromium.executablePath(), args: ['--allow-file-access-from-files'] });
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const errors = [];
@@ -20,6 +22,8 @@ const { chromium } = require('playwright');
       return controller && video.readyState >= 1 && !controller.input.disabled;
     });
     const primary = page.locator('#primary');
+    await primary.hover();
+    await page.waitForFunction(() => window.fixtureManager.controllers.get(document.querySelector('#primary')).bar.classList.contains('is-visible'));
     await primary.evaluate((video) => {
       window.__playCalls = 0;
       const nativePlay = video.play.bind(video);
@@ -78,6 +82,36 @@ const { chromium } = require('playwright');
     await primary.evaluate((video) => { video.src = './assets/demo.webm'; video.load(); });
     await page.waitForFunction(() => { const video = document.querySelector('#primary'); return video.readyState >= 1 && !window.fixtureManager.controllers.get(video).input.disabled; });
 
+    const volumeState = await primary.evaluate((video) => ({ time: video.currentTime, paused: video.paused, volume: video.volume }));
+    const volumeControl = await page.evaluateHandle(() => window.fixtureManager.controllers.get(document.querySelector('#primary')).volumeInput);
+    const muteButton = await page.evaluateHandle(() => window.fixtureManager.controllers.get(document.querySelector('#primary')).muteButton);
+    await primary.hover();
+    await muteButton.hover();
+    await page.waitForFunction((input) => getComputedStyle(input.parentElement).visibility === 'visible', volumeControl);
+    const sliderBox = await volumeControl.boundingBox();
+    if (!sliderBox || sliderBox.height < 20) throw new Error(`Volume slider did not open on hover: ${JSON.stringify(sliderBox)}`);
+    await page.mouse.move(sliderBox.x + sliderBox.width / 2, sliderBox.y + sliderBox.height - 2);
+    await page.mouse.down();
+    await page.mouse.move(sliderBox.x + sliderBox.width / 2, sliderBox.y + 2, { steps: 5 });
+    await page.mouse.up();
+    const draggedVolume = await primary.evaluate((video) => ({ volume: video.volume, muted: video.muted }));
+    if (draggedVolume.volume < 0.9 || draggedVolume.muted) throw new Error(`Dragging the slider up did not raise volume and unmute: ${JSON.stringify(draggedVolume)}`);
+    await volumeControl.evaluate((input) => { input.value = '0.35'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+    const volumeChanged = await primary.evaluate((video) => video.volume === 0.35 && !video.muted);
+    if (!volumeChanged) throw new Error('Vertical volume control did not set volume and unmute the video');
+    await muteButton.click();
+    const mutedAtVolume = await primary.evaluate((video) => video.muted && video.volume === 0.35);
+    if (!mutedAtVolume) throw new Error('Mute button did not preserve the selected volume');
+    await muteButton.click();
+    await volumeControl.evaluate((input) => { input.value = '0'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+    await muteButton.click();
+    const restoredVolume = await primary.evaluate((video) => !video.muted && Math.abs(video.volume - 0.35) < 0.01);
+    const volumeSideEffects = await primary.evaluate((video, state) => video.currentTime === state.time && video.paused === state.paused, volumeState);
+    if (!restoredVolume || !volumeSideEffects) throw new Error('Volume interaction failed to restore volume or changed playback/seek state');
+    await page.mouse.move(1200, 850);
+    const hiddenAfterLeave = await page.evaluate(() => !window.fixtureManager.controllers.get(document.querySelector('#primary')).bar.classList.contains('is-visible'));
+    if (!hiddenAfterLeave) throw new Error('Controls stayed visible after the pointer left the video');
+
     const beforeAdded = await page.evaluate(() => fixtureManager.controllers.size);
     await page.locator('#add').click();
     await page.waitForFunction((count) => fixtureManager.controllers.size === count + 1, beforeAdded);
@@ -94,9 +128,11 @@ const { chromium } = require('playwright');
     await page.waitForFunction(() => fixtureManager.controllers.get(document.querySelector('#primary')).host.hidden);
     await page.locator('#close').click();
     await page.waitForFunction(() => !fixtureManager.controllers.get(document.querySelector('#primary')).host.hidden);
+    await primary.hover();
+    await page.waitForFunction(() => fixtureManager.controllers.get(document.querySelector('#primary')).bar.classList.contains('is-visible'));
     await page.screenshot({ path: screenshot, fullPage: true });
     if (errors.length) throw new Error(`Browser errors: ${errors.join('; ')}`);
-    console.log(JSON.stringify({ browser: await browser.version(), clickSeek: clickedTime, keyboardFrom: beforeKey, keyboardTarget: expectedKey, keyboardTo: afterKey, pausedDragStayedPaused, dragPaused: pausedDuringDrag, dragResumed: resumedAfterDrag, sourceReplacementDidNotResume: true, discoveredAndRemovedVideo: true, reinsertionCreatedFreshController: true, modalOcclusionHidesTimeline: true, screenshot: 'artifacts/fixture.png' }, null, 2));
-    await inputHandle.dispose(); await addedVideo.dispose(); await oldController.dispose();
+    console.log(JSON.stringify({ browser: await browser.version(), clickSeek: clickedTime, keyboardFrom: beforeKey, keyboardTarget: expectedKey, keyboardTo: afterKey, pausedDragStayedPaused, dragPaused: pausedDuringDrag, dragResumed: resumedAfterDrag, sourceReplacementDidNotResume: true, volumeChanged, mutedAtVolume, restoredVolume, volumeSideEffects, hidesWhenPointerLeaves: hiddenAfterLeave, discoveredAndRemovedVideo: true, reinsertionCreatedFreshController: true, modalOcclusionHidesTimeline: true, screenshot: 'artifacts/fixture.png' }, null, 2));
+    await inputHandle.dispose(); await volumeControl.dispose(); await muteButton.dispose(); await addedVideo.dispose(); await oldController.dispose();
   } finally { await browser.close(); }
 })().catch((error) => { console.error(error); process.exitCode = 1; });

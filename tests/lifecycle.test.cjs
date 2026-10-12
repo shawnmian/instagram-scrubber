@@ -147,3 +147,119 @@ test('zero-sized aria-modal dialog does not hide background timelines', async ()
   assert.equal(manager.controllers.get(dom.window.document.querySelector('video')).host.hidden, false);
   manager.destroy(); dom.window.close();
 });
+
+function pointer(win, type, target, x, y, id = 1) {
+  const event = new win.Event(type, { bubbles: true, cancelable: true, composed: true });
+  Object.assign(event, { clientX: x, clientY: y, pointerId: id, isPrimary: true, button: 0 });
+  target.dispatchEvent(event);
+  return event;
+}
+
+test('hover over a video through an Instagram overlay reveals controls; leaving hides them', async () => {
+  const dom = setup('<video></video><div id="overlay"></div>');
+  const manager = initialize(dom.window.document);
+  await tick();
+  const controller = manager.controllers.get(dom.window.document.querySelector('video'));
+  const overlay = dom.window.document.querySelector('#overlay');
+  assert.equal(controller.host.hidden, false);
+  assert.equal(controller.bar.classList.contains('is-visible'), false);
+  assert.equal(controller.input.tabIndex, 0);
+  pointer(dom.window, 'pointermove', overlay, 300, 250);
+  assert.equal(controller.bar.classList.contains('is-visible'), true);
+  pointer(dom.window, 'pointermove', overlay, 700, 600);
+  assert.equal(controller.bar.classList.contains('is-visible'), false);
+  manager.destroy(); dom.window.close();
+});
+
+test('keyboard focus reveals controls, mouse focus does not pin them, and later keyboard input reveals them', async () => {
+  const dom = setup('<video></video><button id="outside">Outside</button>');
+  const manager = initialize(dom.window.document);
+  await tick();
+  const controller = manager.controllers.get(dom.window.document.querySelector('video'));
+  dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+  controller.muteButton.focus();
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(controller.bar.classList.contains('is-visible'), true);
+  dom.window.document.querySelector('#outside').focus();
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(controller.bar.classList.contains('is-visible'), false);
+
+  pointer(dom.window, 'pointerdown', dom.window.document.body, 900, 700);
+  pointer(dom.window, 'pointerdown', controller.muteButton, 470, 350);
+  controller.muteButton.focus();
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  pointer(dom.window, 'pointermove', dom.window.document.body, 700, 600);
+  assert.equal(controller.bar.classList.contains('is-visible'), false);
+
+  pointer(dom.window, 'pointerdown', dom.window.document.body, 900, 700);
+  controller.input.focus();
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  pointer(dom.window, 'pointermove', dom.window.document.body, 700, 600);
+  assert.equal(controller.bar.classList.contains('is-visible'), false);
+  const key = new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true });
+  controller.input.dispatchEvent(key);
+  assert.equal(controller.bar.classList.contains('is-visible'), true);
+  manager.destroy(); dom.window.close();
+});
+
+test('seek and volume drags keep controls visible outside the video until the matching pointer ends', async () => {
+  const dom = setup('<video></video>');
+  const manager = initialize(dom.window.document);
+  await tick();
+  const controller = manager.controllers.get(dom.window.document.querySelector('video'));
+  pointer(dom.window, 'pointermove', dom.window.document.body, 300, 250);
+  pointer(dom.window, 'pointerdown', controller.input, 300, 380);
+  pointer(dom.window, 'pointermove', dom.window.document.body, 700, 600);
+  assert.equal(controller.bar.classList.contains('is-visible'), true);
+  pointer(dom.window, 'pointerup', dom.window.document.body, 700, 600, 2);
+  assert.ok(controller.drag);
+  pointer(dom.window, 'pointerup', dom.window.document.body, 700, 600, 1);
+  assert.equal(controller.drag, null);
+  assert.equal(controller.bar.classList.contains('is-visible'), false);
+
+  pointer(dom.window, 'pointermove', dom.window.document.body, 300, 250);
+  pointer(dom.window, 'pointerdown', controller.volumeInput, 480, 340);
+  pointer(dom.window, 'pointermove', dom.window.document.body, 700, 600);
+  assert.equal(controller.bar.classList.contains('is-visible'), true);
+  pointer(dom.window, 'pointerup', dom.window.document.body, 700, 600, 1);
+  assert.equal(controller.volumeDrag, null);
+  assert.equal(controller.bar.classList.contains('is-visible'), false);
+  manager.destroy(); dom.window.close();
+});
+
+test('layout refresh rechecks a stationary pointer against new clipped video bounds', async () => {
+  const dom = setup('<video></video>');
+  const video = dom.window.document.querySelector('video');
+  let bounds = { left: 100, top: 100, right: 500, bottom: 400, width: 400, height: 300 };
+  video.getBoundingClientRect = () => bounds;
+  const manager = initialize(dom.window.document);
+  await tick();
+  const controller = manager.controllers.get(video);
+  pointer(dom.window, 'pointermove', dom.window.document.body, 300, 250);
+  assert.equal(controller.bar.classList.contains('is-visible'), true);
+  bounds = { left: 550, top: 500, right: 950, bottom: 800, width: 400, height: 300 };
+  dom.window.dispatchEvent(new dom.window.Event('scroll'));
+  await tick();
+  assert.equal(controller.layout.left, 550);
+  assert.equal(controller.bar.classList.contains('is-visible'), false);
+  manager.destroy(); dom.window.close();
+});
+
+test('window blur ends volume drag and clears stale hover; destroy removes pointer tracking', async () => {
+  const dom = setup('<video></video>');
+  const manager = initialize(dom.window.document);
+  await tick();
+  const controller = manager.controllers.get(dom.window.document.querySelector('video'));
+  pointer(dom.window, 'pointermove', dom.window.document.body, 300, 250);
+  pointer(dom.window, 'pointerdown', controller.volumeInput, 480, 340);
+  pointer(dom.window, 'pointermove', dom.window.document.body, 700, 600);
+  assert.equal(controller.bar.classList.contains('is-visible'), true);
+  dom.window.dispatchEvent(new dom.window.Event('blur'));
+  assert.equal(controller.volumeDrag, null);
+  assert.equal(controller.bar.classList.contains('is-visible'), false);
+  manager.destroy();
+  const point = manager.lastPointer;
+  pointer(dom.window, 'pointermove', dom.window.document.body, 300, 250);
+  assert.equal(manager.lastPointer, point);
+  dom.window.close();
+});

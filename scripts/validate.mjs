@@ -13,14 +13,15 @@ assert(manifest.browser_specific_settings?.gecko?.strict_min_version === '140.0'
 assert(JSON.stringify(manifest.browser_specific_settings.gecko.data_collection_permissions?.required) === '["none"]', 'missing no-data declaration');
 assert(!manifest.permissions && !manifest.host_permissions, 'unexpected extension permissions');
 const expected = ['https://www.instagram.com/*', 'https://instagram.com/*'];
-assert(JSON.stringify(manifest.content_scripts[0].matches) === JSON.stringify(expected), 'host allowlist mismatch');
-for (const file of ['media.js', 'controller.js', 'content.js', 'icons/icon.svg']) {
+for (const script of manifest.content_scripts) assert(JSON.stringify(script.matches) === JSON.stringify(expected), 'host allowlist mismatch');
+for (const file of ['media.js', 'controller.js', 'content.js', 'page-volume.js', 'icons/icon.svg']) {
   const full = path.join(root, 'extension', file);
   assert(fs.existsSync(full), `missing ${file}`);
   if (file.endsWith('.js')) {
     const result = spawnSync(process.execPath, ['--check', full], { encoding: 'utf8' });
     assert(result.status === 0, `${file} syntax error: ${result.stderr}`);
-    const source = fs.readFileSync(full, 'utf8');
+    // The SVG namespace is an identifier for createElementNS, not a fetched resource.
+    const source = fs.readFileSync(full, 'utf8').replaceAll('http://www.w3.org/2000/svg', '');
     assert(!/https?:\/\//.test(source), `${file} includes remote URL`);
   }
 }
