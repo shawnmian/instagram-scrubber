@@ -137,3 +137,13 @@ test('visibility and fullscreen changes update an initially hidden page', async 
   assert.equal(host.hidden, false);
   manager.destroy(); dom.window.close();
 });
+
+test('zero-sized aria-modal dialog does not hide background timelines', async () => {
+  const dom = setup('<video id="background"></video><div id="modal" role="dialog" aria-modal="true"></div>');
+  const modal = dom.window.document.querySelector('#modal');
+  modal.getBoundingClientRect = () => ({ left: 400, top: 300, right: 400, bottom: 300, width: 0, height: 0 });
+  const manager = initialize(dom.window.document);
+  await tick();
+  assert.equal(manager.controllers.get(dom.window.document.querySelector('video')).host.hidden, false);
+  manager.destroy(); dom.window.close();
+});

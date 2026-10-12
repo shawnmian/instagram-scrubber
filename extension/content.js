@@ -43,8 +43,9 @@
         ancestor = ancestor.parentElement;
       }
       if (!rendered) continue;
-      if (dialog.getAttribute('aria-modal') === 'true') return null;
       const box = rectangle(dialog);
+      if (box.width <= 0 || box.height <= 0) continue;
+      if (dialog.getAttribute('aria-modal') === 'true') return null;
       if (centerX >= box.left && centerX <= box.right && centerY >= box.top && centerY <= box.bottom) return null;
     }
     return { left, top, width: right - left, height: bottom - top };

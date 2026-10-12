@@ -15,9 +15,9 @@
 ## Task 3: Discovery, fixture, and delivery
 
 - Added incremental video discovery, mutation/resize/intersection tracking, clipping and dialog checks, page lifecycle recovery, a local fixture video, README, browser smoke script, and ZIP packaging.
-- Lifecycle test suite passes: 8 tests, including duplicate initialization, add/remove/reinsert, extension-root mutation filtering, hidden/clipped videos, modal open/close, ancestor visibility changes, viewport visibility/fullscreen events, and automatic persisted-page restoration.
-- Full automated result at handoff: 24 tests pass; manifest and JavaScript validation pass; package archive contains `manifest.json` at its root.
-- Environment limits: npm registry access failed with `ENOTFOUND`, so development tools could not be installed in this environment. Existing jsdom and Playwright packages were used locally from existing project caches. Chromium headless exits with `SIGABRT` (exit 134), and parent testing found the same headless abort for isolated Firefox. The browser smoke script now covers paused and playing drag behavior, source replacement during a drag, same-task removal/reinsertion, and a closed-dialog screenshot. It remains unrun because Chromium aborts before opening a page. Mozilla `web-ext lint` was unavailable because no `web-ext` executable was installed. No signed-in live Instagram test was performed.
+- Lifecycle test suite passes: 9 tests, including duplicate initialization, add/remove/reinsert, extension-root mutation filtering, hidden/clipped videos, modal open/close, ancestor visibility changes, viewport visibility/fullscreen events, and automatic persisted-page restoration.
+- Full automated result at handoff: 25 tests pass; manifest and JavaScript validation pass; package archive contains `manifest.json` at its root.
+- Environment limits: npm registry access failed with `ENOTFOUND`, so development tools could not be installed in this environment. Existing jsdom and Playwright packages were used locally from existing project caches. Chromium headless exits with `SIGABRT` (exit 134), and parent testing found the same headless abort for isolated Firefox. The browser smoke script now covers paused and playing drag behavior, source replacement during a drag, delayed removal/reinsertion, and a closed-dialog screenshot. It remains unrun because Chromium aborts before opening a page. Mozilla `web-ext lint` was unavailable because no `web-ext` executable was installed. No signed-in live Instagram test was performed.
 
 ## Rulings
 
