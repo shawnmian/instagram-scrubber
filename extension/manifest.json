@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Instagram Scrubber",
+  "version": "0.1.0",
+  "description": "Adds an accessible seek timeline to Instagram videos.",
+  "icons": { "48": "icons/icon.svg" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*", "https://instagram.com/*"],
+      "js": ["media.js", "controller.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "instagram-scrubber@local.invalid",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["none"] }
+    }
+  }
+}

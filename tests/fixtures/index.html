@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instagram Scrubber browser fixture</title>
+  <style>
+    body { margin:0; padding:24px; color:#eee; background:#17151a; font:15px system-ui,sans-serif; }
+    h1 { font-size:22px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:24px; max-width:1000px; }
+    .card { position:relative; padding:16px; border:1px solid #49434e; border-radius:12px; background:#242127; }
+    video { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:#000; }
+    .clip { width:280px; height:120px; overflow:hidden; border:2px dashed #ff4f91; }
+    .clip video { width:380px; max-width:none; }
+    .controls { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+    button { border:0; border-radius:6px; padding:8px 12px; color:#fff; background:#754460; cursor:pointer; }
+    #modal { display:none; position:fixed; z-index:5; inset:20% 15%; padding:40px; background:rgba(30,10,35,.92); border:2px solid #fff; }
+    #modal.open { display:block; }
+    #dynamic { min-height:200px; }
+    code { color:#ffc2da; }
+  </style>
+</head>
+<body>
+  <h1>Instagram Scrubber browser fixture</h1>
+  <p>Local media exercises metadata, seeking, playback restoration, and live DOM changes.</p>
+  <div class="controls">
+    <button id="add">Add video</button><button id="remove">Remove added video</button>
+    <button id="reuse">Remove and reinsert first video</button><button id="source">Change first video's source</button>
+    <button id="dialog">Toggle blocking dialog</button>
+  </div>
+  <div class="grid">
+    <section class="card"><h2>Primary video</h2><video id="primary" muted playsinline loop preload="auto" src="./assets/demo.webm"></video></section>
+    <section class="card"><h2>Clipped video</h2><div class="clip"><video id="clipped" muted playsinline loop preload="auto" src="./assets/demo.webm"></video></div></section>
+  </div>
+  <div id="dynamic"></div>
+  <div id="modal" role="dialog" aria-modal="true">This dialog should hide controls behind it. <button id="close">Close</button></div>
+  <script src="../../extension/media.js"></script>
+  <script src="../../extension/controller.js"></script>
+  <script src="../../extension/content.js"></script>
+  <script>
+    window.fixtureManager = InstagramScrubber.initialize(document);
+    const primary = document.querySelector('#primary');
+    let added;
+    document.querySelector('#add').onclick = () => {
+      if (added?.isConnected) return;
+      added = document.createElement('video'); added.muted = true; added.playsInline = true; added.loop = true;
+      added.src = './assets/demo.webm'; added.style.width = '360px';
+      document.querySelector('#dynamic').append(added);
+    };
+    document.querySelector('#remove').onclick = () => added?.remove();
+    document.querySelector('#reuse').onclick = () => { const parent = primary.parentElement; primary.remove(); parent.append(primary); };
+    document.querySelector('#source').onclick = () => { primary.src = './assets/demo.webm?source=changed'; primary.load(); };
+    document.querySelector('#dialog').onclick = () => document.querySelector('#modal').classList.toggle('open');
+    document.querySelector('#close').onclick = () => document.querySelector('#modal').classList.remove('open');
+  </script>
+</body>
+</html>
