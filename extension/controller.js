@@ -58,7 +58,8 @@
       this.muteButton.setAttribute('aria-label', 'Mute video'); this.muteButton.setAttribute('aria-pressed', 'false');
       this.muteIcon = this.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       this.muteIcon.setAttribute('viewBox', '0 0 24 24'); this.muteIcon.setAttribute('aria-hidden', 'true');
-      this.muteButton.append(this.muteIcon);
+      this.muteIconPath = this.document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      this.muteIcon.append(this.muteIconPath); this.muteButton.append(this.muteIcon);
       this.volumePopup = this.document.createElement('div'); this.volumePopup.className = 'volume-popup';
       this.volumeInput = this.document.createElement('input'); this.volumeInput.type = 'range'; this.volumeInput.className = 'volume-input';
       this.volumeInput.min = '0'; this.volumeInput.max = '1'; this.volumeInput.step = '0.01'; this.volumeInput.setAttribute('aria-label', 'Video volume');
@@ -144,9 +145,9 @@
       const muted = Boolean(this.video.muted || volume === 0);
       this.muteButton.setAttribute('aria-pressed', String(muted));
       this.muteButton.setAttribute('aria-label', muted ? 'Unmute video' : 'Mute video');
-      this.muteIcon.innerHTML = muted
-        ? '<path d="M3 9v6h4l5 4V5L7 9H3zm13.59 3 2.12 2.12-1.41 1.41L15.17 13.4l-2.12 2.12-1.41-1.41L13.76 12l-2.12-2.12 1.41-1.41 2.12 2.12 2.12-2.12 1.41 1.41L16.59 12z"/>'
-        : '<path d="M3 9v6h4l5 4V5L7 9H3zm12.5 3a3.5 3.5 0 0 0-2.5-3.35v6.7a3.5 3.5 0 0 0 2.5-3.35zm-2.5-8v2.06a6 6 0 0 1 0 11.88V20a8 8 0 0 0 0-16z"/>';
+      this.muteIconPath.setAttribute('d', muted
+        ? 'M3 9v6h4l5 4V5L7 9H3zm13.59 3 2.12 2.12-1.41 1.41L15.17 13.4l-2.12 2.12-1.41-1.41L13.76 12l-2.12-2.12 1.41-1.41 2.12 2.12 2.12-2.12 1.41 1.41L16.59 12z'
+        : 'M3 9v6h4l5 4V5L7 9H3zm12.5 3a3.5 3.5 0 0 0-2.5-3.35v6.7a3.5 3.5 0 0 0 2.5-3.35zm-2.5-8v2.06a6 6 0 0 1 0 11.88V20a8 8 0 0 0 0-16z');
     }
 
     setVolume(value) {
